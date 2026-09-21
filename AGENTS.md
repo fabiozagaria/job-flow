@@ -30,7 +30,7 @@ Durante implementazione e debugging:
 
 ## Contesto architetturale corrente
 
-JobFlow gestisce lavori asincroni. Il modello concettuale corrente del Job comprende `id`, `name`, `type`, `status`, `payload`, `error`.
+JobFlow gestisce lavori asincroni.
 
 Lifecycle v0.1:
 
@@ -39,8 +39,22 @@ CREATED -> PROCESSING -> COMPLETED
                     \-> FAILED
 ```
 
-`CREATED` rappresenta anche l'attesa di elaborazione nella prima versione. `type` seleziona il tipo di processor; il payload contiene l'input specifico. Primo workload: generazione PDF. Il worker esegue il lavoro; la queue, quando introdotta, conserverà il lavoro in attesa.
+`CREATED` rappresenta anche l'attesa di elaborazione nella prima versione.
+
+Il precedente modello `type + payload` è stato superato: il Job contiene un Work/input concreto e il suo tipo concreto identifica il lavoro da eseguire.
+
+Separazione corrente:
+- Work = input e descrizione di cosa va fatto;
+- `Processor<I, O>` = elaborazione specializzata;
+- Result = output specifico;
+- ProcessorRegistry = risolve `Class<?> -> Processor<?, ?>`;
+- JobWorker = orchestra lifecycle ed esecuzione;
+- queue = eventuale meccanismo di attesa/consegna, separato dal Worker.
+
+Il Worker non deve contenere switch/if sui tipi concreti. Nella v0.1 può essere un `@Component` Spring; essere un bean non implica asincronia.
+
+Primo workload: generazione PDF.
 
 ## Prossimo passo
 
-Riprendere dal design dell'output/result del Job. Non anticipare l'implementazione finché questa responsabilità non è stata ragionata.
+Riprendere dal design di **come il JobWorker riceve ed esegue asincronamente i Job CREATED nella v0.1 in-process**, senza introdurre prematuramente RabbitMQ. In seguito definire la persistenza/associazione del Result e l'implementazione minima del ProcessorRegistry.
