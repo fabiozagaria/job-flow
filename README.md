@@ -10,7 +10,27 @@ Un client crea un job e JobFlow riesce a elaborarlo asincronamente fino a uno st
 
 Il primo workload è la **generazione di un documento PDF**. Il PDF serve a verificare l'infrastruttura asincrona: non è il dominio centrale del progetto.
 
-Flusso concettuale:
+## Modello corrente
+
+```text
+Job
+├── id
+├── name
+├── status
+├── work
+└── result
+
+Work
+└── GeneratePdfWork
+    ├── title
+    └── textBody
+```
+
+`Work` e `Result` sono entity astratte persistite con strategia JPA `JOINED`. Il `Job` mantiene associazioni unidirezionali `@OneToOne` verso Work e Result. `StatusJob` è persistito come stringa e contiene `CREATED`, `PROCESSING`, `COMPLETED` e `FAILED`.
+
+Il Work descrive **cosa va fatto**. L'elaborazione sarà responsabilità di un `Processor<I, O>` specializzato; il Worker dovrà orchestrare il lifecycle senza contenere logica specifica della generazione PDF.
+
+## Flusso obiettivo v0.1
 
 ```text
 Client
@@ -19,7 +39,7 @@ POST /jobs
   |
 Job CREATED
   |
-risposta immediata con jobId
+risposta rapida con jobId
   |
 Worker
   |
@@ -27,67 +47,28 @@ PROCESSING
   |
 Processor genera PDF
   |
-COMPLETED ----> PDF disponibile
+COMPLETED ----> risultato disponibile
      \
-      -> FAILED + errore
+      -> FAILED
 ```
 
-## Modello concettuale corrente
+`CREATED` rappresenta anche l'attesa di elaborazione nella prima versione. Non viene introdotto `QUEUED` finché non serve una distinzione reale.
 
-```text
-Job
-├── id
-├── name
-├── status
-├── work
-├── result
-└── error
+## WIP corrente
 
-Work concreto
-        |
-        v
-Processor<I, O>
-        |
-        v
-Result concreto
-```
+Prima di introdurre Worker ed Executor, il vertical slice deve dimostrare che un `Job` contenente un nuovo `GeneratePdfWork` può essere persistito e riletto correttamente da MySQL.
 
-Il Job contiene un **Work concreto**, cioè l'input che descrive cosa va fatto. Il tipo concreto del Work identifica il lavoro: per esempio, `GeneratePdfWork`.
+Il prossimo punto tecnico è decidere il lifecycle di persistenza della relazione Job → Work: salvataggio esplicito del Work oppure cascade dal Job. La scelta deve precedere l'implementazione del primo Repository/Service.
 
-Il Work non esegue il lavoro e non deve conoscere le dipendenze infrastrutturali. L'elaborazione è responsabilità di un `Processor<I, O>` specializzato, ad esempio `GeneratePdfProcessor`.
-
-Un `ProcessorRegistry` associa la classe concreta del Work al Processor compatibile. Il `JobWorker` orchestra il lifecycle: riceve un Job, lo porta a `PROCESSING`, risolve il Processor, lo esegue e porta il Job a `COMPLETED` o `FAILED`.
-
-Stati iniziali:
-
-```text
-CREATED -> PROCESSING -> COMPLETED
-                    \-> FAILED
-```
-
-Nella v0.1, `CREATED` significa che il job è stato accettato ed è in attesa di elaborazione. Non viene introdotto `QUEUED` finché non serve distinguere realmente i due concetti.
-
-La queue e il worker hanno responsabilità diverse: la prima conserva o consegna lavoro in attesa; il secondo lo esegue. Nella prima versione non è necessario introdurre RabbitMQ.
-
-## API e realtime
-
-La creazione del job deve essere asincrona: l'API accetta il lavoro e restituisce rapidamente il `jobId`, senza eseguire l'elaborazione pesante nel controller.
-
-Lo stato di un job sarà consultabile tramite:
-
-```http
-GET /jobs/{id}
-```
-
-Per gli aggiornamenti realtime verrà valutato inizialmente SSE, dato che il flusso principale è server -> client. WebSocket resta un'opzione se emergerà una reale necessità bidirezionale.
+La rappresentazione dell'errore di un Job fallito è intenzionalmente rimandata a quando verrà implementato il percorso `FAILED`.
 
 ## Roadmap tecnica
 
-1. Job domain e persistenza del primo Work.
+1. Persistenza e rilettura del primo Job con GeneratePdfWork.
 2. Worker/executor in-process, lifecycle ed esecuzione asincrona.
-3. Generazione PDF e persistenza dell'output.
+3. Processor PDF e persistenza dell'output.
 4. Gestione errori e lettura dello stato.
-5. Aggiornamenti realtime.
+5. Aggiornamenti realtime, valutando SSE per primo.
 6. Concorrenza, retry, timeout, cancellazione e idempotenza.
 7. Messaging/RabbitMQ e, se giustificato, separazione API/worker.
 8. Spring AI/tool calling come orchestratore vincolato, non come semplice chatbot.
@@ -103,6 +84,6 @@ Per gli aggiornamenti realtime verrà valutato inizialmente SSE, dato che il flu
 
 ## Stato
 
-**In sviluppo — dominio e primo Work modellati.**
+**In sviluppo — bootstrap Spring Boot completato e dominio JPA iniziale implementato.**
 
-Prossimo passo: progettare come i Job in stato `CREATED` vengono consegnati ed eseguiti realmente in modo asincrono dal JobWorker nella v0.1 in-process, senza introdurre RabbitMQ prematuramente.
+Prossimo passo: rendere persistibile e verificare end-to-end il primo `Job` con `GeneratePdfWork`, partendo dalla decisione sul cascade.

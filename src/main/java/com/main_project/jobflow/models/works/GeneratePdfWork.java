@@ -14,14 +14,11 @@ import lombok.*;
 @Builder
 @Getter
 @Setter
-public class GeneratePDFWork extends Work {
+public class GeneratePdfWork extends Work {
 
     @Column(nullable = false)
     private String title;
 
     @Column(nullable = false)
     private String textBody;
-
-
-
 }
