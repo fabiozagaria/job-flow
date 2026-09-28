@@ -30,8 +30,6 @@ Durante implementazione e debugging:
 
 ## Contesto architetturale corrente
 
-JobFlow gestisce lavori asincroni.
-
 Lifecycle v0.1:
 
 ```text
@@ -39,22 +37,21 @@ CREATED -> PROCESSING -> COMPLETED
                     \-> FAILED
 ```
 
-`CREATED` rappresenta anche l'attesa di elaborazione nella prima versione.
+Il precedente modello `type + payload` è stato superato: il Job contiene un Work concreto e il suo tipo identifica il lavoro.
 
-Il precedente modello `type + payload` è stato superato: il Job contiene un Work/input concreto e il suo tipo concreto identifica il lavoro da eseguire.
+Il repository contiene già il bootstrap Spring Boot e il primo dominio JPA:
+- `Job`;
+- `Work` astratto con `JOINED`;
+- `GeneratePdfWork`;
+- `Result` astratto con `JOINED`;
+- `StatusJob` persistito come stringa.
 
-Separazione corrente:
-- Work = input e descrizione di cosa va fatto;
-- `Processor<I, O>` = elaborazione specializzata;
-- Result = output specifico;
-- ProcessorRegistry = risolve `Class<?> -> Processor<?, ?>`;
-- JobWorker = orchestra lifecycle ed esecuzione;
-- queue = eventuale meccanismo di attesa/consegna, separato dal Worker.
+La separazione prevista resta: Work → Processor → Result; ProcessorRegistry per la risoluzione; JobWorker per il lifecycle; eventuale queue separata dal Worker.
 
-Il Worker non deve contenere switch/if sui tipi concreti. Nella v0.1 può essere un `@Component` Spring; essere un bean non implica asincronia.
+## WIP e prossimo passo
 
-Primo workload: generazione PDF.
+Il WIP corrente **non è ancora Worker/Executor**. Prima verificare la persistenza del primo Job con GeneratePdfWork.
 
-## Prossimo passo
+Prossimo passo: decidere il lifecycle di persistenza Job → Work (salvataggio esplicito oppure `CascadeType.PERSIST`), quindi implementare il minimo necessario per salvare e rileggere il primo Job da MySQL.
 
-Riprendere dal design di **come il JobWorker riceve ed esegue asincronamente i Job CREATED nella v0.1 in-process**, senza introdurre prematuramente RabbitMQ. In seguito definire la persistenza/associazione del Result e l'implementazione minima del ProcessorRegistry.
+Solo dopo questa verifica passare al dispatch asincrono in-process.
