@@ -1,6 +1,6 @@
 # JobFlow — Context
 
-Ultimo aggiornamento: 2026-09-21
+Ultimo aggiornamento: 2026-09-28
 
 ## Obiettivo
 
@@ -10,123 +10,67 @@ JobFlow è il progetto portfolio principale successivo a Expense Tracker. Deve m
 
 Un client crea un job e JobFlow riesce a elaborarlo asincronamente fino a uno stato terminale verificabile.
 
-## Decisioni prese
+## Stato reale del repository
+
+- Progetto Spring Boot inizializzato con Maven, Spring Boot 4.1.1 e Java 21 come target.
+- Dipendenze correnti: Spring Web MVC, Spring Data JPA, Validation, MySQL Driver e Lombok.
+- MySQL configurato su database `job_flow`; la password arriva da variabile d'ambiente `DB_PASSWORD` e non è versionata.
+- `Job` è una entity con `id`, `name`, `Work`, `Result` e `StatusJob`.
+- `StatusJob` usa `EnumType.STRING`: `CREATED`, `PROCESSING`, `COMPLETED`, `FAILED`.
+- `Work` è una entity astratta con ereditarietà `JOINED`.
+- Primo Work concreto: `GeneratePdfWork` con `title` e `textBody`.
+- `Result` è attualmente una entity astratta con ereditarietà `JOINED`; i risultati concreti non sono ancora implementati.
+- Le relazioni Job → Work e Job → Result sono unidirezionali `@OneToOne`.
+- Repository, Service, Controller, Processor, Registry, Worker ed Executor non sono ancora implementati.
+
+## Decisioni architetturali stabili
 
 - Il dominio centrale è il **Job**, non il documento PDF.
 - Lifecycle v0.1: `CREATED -> PROCESSING -> COMPLETED | FAILED`.
 - `CREATED` include inizialmente il significato di "in attesa di elaborazione"; niente `QUEUED` prematuro.
-- `FAILED` è uno stato; l'informazione sull'errore è separata.
-- La precedente coppia `type + payload` è stata rivista: `type` era ridondante se serviva solo a riconoscere il tipo concreto di lavoro.
-- Il Job contiene un **Work/input concreto**. Il tipo concreto del Work rappresenta già quale lavoro deve essere svolto.
-- Primo Work reale: generazione PDF. Un possibile input è `GeneratePdfWork` con i dati necessari alla generazione.
-- Work diversi possono avere modelli dati, dipendenze e risultati completamente diversi.
-- Il Work descrive **cosa va fatto**; non deve conoscere necessariamente le dipendenze infrastrutturali necessarie per eseguirlo.
-- L'elaborazione è delegata a Processor specifici.
-- Contratto concettuale del processor: `Processor<I, O>`, dove `I` è il Work/input e `O` il Result/output.
-- Esempio: `GeneratePdfProcessor : Processor<GeneratePdfWork, GeneratePdfResult>`.
-- Non viene introdotta per ora una `JobResult` comune: risultati diversi non condividono necessariamente dati o comportamento.
-- Il Worker non deve contenere `if`/`switch` per scegliere il processor.
-- Un **ProcessorRegistry** indirizza il Work verso il Processor corretto tramite una mappa concettuale `Class<?> -> Processor<?, ?>`.
-- La chiave rappresenta la classe concreta dell'input, ad esempio `GeneratePdfWork.class`; non rappresenta l'output.
-- La Map eterogenea perde parte dell'informazione generica statica: il punto di risoluzione dei tipi deve restare confinato nel Registry, senza spargere cast/wildcard nel Worker.
-- Il **JobWorker** orchestra il lifecycle: prende il Job, passa a `PROCESSING`, chiede al Registry il Processor, avvia `process(work)`, quindi porta il Job a `COMPLETED` oppure `FAILED`.
-- Nella v0.1 Spring Boot il Worker può essere un `@Component`. `@Component` lo rende un bean gestito da Spring, ma **non** lo rende automaticamente asincrono.
-- L'asincronia e il meccanismo con cui i Job `CREATED` vengono consegnati al Worker restano da progettare.
-- Il worker esegue/orchestra il job; una queue conserva i job in attesa: non sono la stessa responsabilità.
-- Il controller/API non deve eseguire direttamente un lavoro lungo: accetta il job e risponde rapidamente con il suo identificatore.
-- Lettura stato prevista: `GET /jobs/{id}`.
-- Per il realtime si preferisce valutare SSE prima di WebSocket perché il bisogno iniziale è soprattutto server -> client.
-- RabbitMQ, microservizi e Spring AI non entrano nella prima versione. Saranno introdotti solo quando esiste un problema concreto che li giustifica.
+- La precedente coppia `type + payload` è stata superata: il tipo concreto del Work identifica già il lavoro.
+- Work = input/cosa va fatto.
+- Processor = elaborazione specializzata.
+- Result = output prodotto.
+- ProcessorRegistry = risolve il Processor compatibile senza spargere `if`/`switch` nel Worker.
+- JobWorker = orchestra lifecycle ed esecuzione.
+- Queue = eventuale meccanismo di attesa/consegna, separato dal Worker.
+- RabbitMQ, microservizi, realtime e Spring AI non entrano finché il vertical slice in-process non rende concreta la necessità.
 
-## Modello concettuale corrente
+## Modello corrente
 
 ```text
 Job
 ├── id
 ├── name
 ├── status
-├── work
-├── result
-└── error
+├── work -> Work
+└── result -> Result
 
-Work / input concreto
-        |
-        v
-Processor<I, O>
-        |
-        v
-Result / output
+Work
+└── GeneratePdfWork
+    ├── title
+    └── textBody
 ```
 
-Il dettaglio esatto di come `result` verrà rappresentato/persistito nel Job non è ancora implementato; è stato però chiarito che ogni processor può produrre un tipo di risultato differente.
+La rappresentazione dell'errore associato a `FAILED` non è ancora implementata e verrà decisa quando si costruirà quel percorso.
 
-## Dispatch dei Processor
+## WIP corrente
 
-```text
-Job
- |
- v
-Work concreto
- |
- | getClass()
- v
-ProcessorRegistry
- |
- | Class del Work -> Processor
- v
-Processor<I, O>
- |
- | process(input)
- v
-Result
-```
+**Persistenza del primo Job con GeneratePdfWork.**
 
-Il Registry è l'indirizzatore: il Worker gli passa il Work e non decide direttamente quale implementazione usare.
+Prima di progettare ulteriormente Worker/Executor, verificare concretamente il mapping JPA: creare un Job con un nuovo GeneratePdfWork, salvarlo in MySQL e rileggerlo.
 
-## Worker
+Decisione immediata da prendere: se il Job possiede il lifecycle del Work, valutare `CascadeType.PERSIST`; alternativa: persistere esplicitamente il Work prima del Job. Non applicare `CascadeType.ALL` automaticamente senza una motivazione sul lifecycle.
 
-```text
-CREATED
-   |
-   v
-JobWorker
-   |
-   +--> PROCESSING
-   |
-   +--> ProcessorRegistry
-   |        |
-   |        v
-   |     Processor
-   |        |
-   |        v
-   |      Result
-   |
-   +--> COMPLETED
-   |
-   \--> FAILED + error
-```
+## Passi successivi
 
-Responsabilità:
-- **Work**: input/cosa va fatto.
-- **Processor**: come viene elaborato uno specifico Work.
-- **Result**: output prodotto.
-- **ProcessorRegistry**: trova il Processor compatibile.
-- **JobWorker**: orchestra esecuzione e lifecycle.
-- **Queue**: conserva/consegna lavoro in attesa quando prevista dall'architettura.
-
-## Punto esatto di ripresa
-
-Progettare **come il JobWorker viene eseguito realmente in modo asincrono e come riceve i Job in stato CREATED nella v0.1 in-process**, senza introdurre ancora RabbitMQ.
-
-Domande successive:
-- quale meccanismo in-process consegna il Job al Worker;
-- come persistere/associare il Result al Job;
-- come confinare in modo semplice e sicuro la risoluzione generica nel ProcessorRegistry.
-
-## Evoluzione prevista
-
-v0.1: API + DB + worker/executor in-process + lifecycle + PDF.
-Successivamente: realtime, concorrenza, retry/timeout/cancellazione/idempotenza, messaging/RabbitMQ, eventuale separazione API/worker, Spring AI/tool calling.
+Dopo la persistenza verificata:
+1. repository/service/API minima per creare e leggere Job;
+2. dispatch in-process con Executor e JobWorker;
+3. ProcessorRegistry e Processor PDF;
+4. Result concreto e percorso COMPLETED/FAILED;
+5. realtime e robustezza progressivamente.
 
 ## Metodo di lavoro
 
