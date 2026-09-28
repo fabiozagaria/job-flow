@@ -19,7 +19,7 @@ public class Job {
     @Column(nullable = false)
     private String name;
 
-    @OneToOne
+    @OneToOne(cascade = CascadeType.PERSIST)
     @JoinColumn(name = "work_id")
     private Work work;
 
