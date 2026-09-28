@@ -26,9 +26,25 @@ Work
     └── textBody
 ```
 
-`Work` e `Result` sono entity astratte persistite con strategia JPA `JOINED`. Il `Job` mantiene associazioni unidirezionali `@OneToOne` verso Work e Result. `StatusJob` è persistito come stringa e contiene `CREATED`, `PROCESSING`, `COMPLETED` e `FAILED`.
+`Work` e `Result` sono entity astratte persistite con strategia JPA `JOINED`. Il `Job` mantiene associazioni unidirezionali `@OneToOne` verso Work e Result. La relazione Job → Work usa `CascadeType.PERSIST`: un nuovo Work posseduto dal Job viene persistito insieme al Job senza estendere inutilmente il cascade ad altre operazioni.
+
+`StatusJob` è persistito come stringa e contiene `CREATED`, `PROCESSING`, `COMPLETED` e `FAILED`.
 
 Il Work descrive **cosa va fatto**. L'elaborazione sarà responsabilità di un `Processor<I, O>` specializzato; il Worker dovrà orchestrare il lifecycle senza contenere logica specifica della generazione PDF.
+
+## API implementata
+
+È disponibile il primo endpoint di creazione:
+
+```text
+POST /jobs
+```
+
+La request usa `CreatePdfJobRequest` con Bean Validation. Il backend costruisce `GeneratePdfWork` e `Job`, assegna autonomamente lo stato iniziale `CREATED` e persiste il Job tramite `JobRepository`.
+
+La risposta usa `JobResponse`, include l'id generato, il nome e lo stato, restituisce **201 Created** e un header `Location` riferito alla risorsa creata.
+
+La persistenza è stata verificata manualmente con Postman e MySQL: il Job e il relativo GeneratePdfWork vengono salvati correttamente tramite cascade.
 
 ## Flusso obiettivo v0.1
 
@@ -56,22 +72,25 @@ COMPLETED ----> risultato disponibile
 
 ## WIP corrente
 
-Prima di introdurre Worker ed Executor, il vertical slice deve dimostrare che un `Job` contenente un nuovo `GeneratePdfWork` può essere persistito e riletto correttamente da MySQL.
+Il primo slice di creazione e persistenza è verificato. Il prossimo passo è completare la lettura di un Job con `GET /jobs/{id}`, inclusa la gestione del caso inesistente.
 
-Il prossimo punto tecnico è decidere il lifecycle di persistenza della relazione Job → Work: salvataggio esplicito del Work oppure cascade dal Job. La scelta deve precedere l'implementazione del primo Repository/Service.
+Solo dopo si passa al dispatch asincrono in-process con Executor e JobWorker.
+
+Redis verrà studiato e introdotto solo con una responsabilità concreta; MySQL rimane la source of truth dei Job.
 
 La rappresentazione dell'errore di un Job fallito è intenzionalmente rimandata a quando verrà implementato il percorso `FAILED`.
 
 ## Roadmap tecnica
 
-1. Persistenza e rilettura del primo Job con GeneratePdfWork.
+1. Completare GET /jobs/{id} e gestione not-found.
 2. Worker/executor in-process, lifecycle ed esecuzione asincrona.
 3. Processor PDF e persistenza dell'output.
 4. Gestione errori e lettura dello stato.
 5. Aggiornamenti realtime, valutando SSE per primo.
 6. Concorrenza, retry, timeout, cancellazione e idempotenza.
-7. Messaging/RabbitMQ e, se giustificato, separazione API/worker.
-8. Spring AI/tool calling come orchestratore vincolato, non come semplice chatbot.
+7. Redis dove risolve un problema concreto, mantenendo MySQL come source of truth.
+8. Messaging/RabbitMQ e, se giustificato, separazione API/worker.
+9. Spring AI/tool calling come orchestratore vincolato, non come semplice chatbot.
 
 ## Principi
 
@@ -84,6 +103,6 @@ La rappresentazione dell'errore di un Job fallito è intenzionalmente rimandata 
 
 ## Stato
 
-**In sviluppo — bootstrap Spring Boot completato e dominio JPA iniziale implementato.**
+**In sviluppo — creazione e persistenza del primo Job verificate end-to-end.**
 
-Prossimo passo: rendere persistibile e verificare end-to-end il primo `Job` con `GeneratePdfWork`, partendo dalla decisione sul cascade.
+Prossimo passo: implementare e verificare `GET /jobs/{id}`, poi iniziare il dispatch asincrono in-process.
