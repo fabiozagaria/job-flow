@@ -3,7 +3,8 @@ package com.main_project.jobflow.services;
 import com.main_project.jobflow.dto.CreatePdfJobRequest;
 import com.main_project.jobflow.models.Job;
 import com.main_project.jobflow.models.StatusJob;
-import com.main_project.jobflow.models.works.GeneratePDFWork;
+
+import com.main_project.jobflow.models.works.GeneratePdfWork;
 import com.main_project.jobflow.repository.JobRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,7 +15,7 @@ public class JobService {
     private final JobRepository jobRepository;
 
     public Job createPdfJob(CreatePdfJobRequest request) {
-        GeneratePDFWork work = GeneratePDFWork.builder()
+        GeneratePdfWork work = GeneratePdfWork.builder()
                 .title(request.title())
                 .textBody(request.textBody())
                 .build();
