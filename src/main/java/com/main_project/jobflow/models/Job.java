@@ -23,6 +23,10 @@ public class Job {
     @JoinColumn(name = "work_id")
     private Work work;
 
+    @OneToOne
+    @JoinColumn(name = "result_id")
+    private Result result;
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private StatusJob status;
