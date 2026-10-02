@@ -1,8 +1,8 @@
 # JobFlow
 
-JobFlow è un progetto full stack orientato all'elaborazione asincrona di job. L'obiettivo non è costruire un altro CRUD, ma studiare progressivamente worker, concorrenza, aggiornamenti realtime, retry, idempotenza e messaging.
+JobFlow è un progetto backend orientato all'elaborazione asincrona di job. Il primo obiettivo è accettare un lavoro, eseguirlo tramite worker ed esporre stato e risultato. L'esecuzione asincrona è il traguardo della v0.1, non una funzionalità già completata.
 
-## Sprint goal #1
+## Obiettivo della prima versione
 
 Un client crea un job e JobFlow riesce a elaborarlo asincronamente fino a uno stato terminale verificabile.
 
@@ -70,7 +70,7 @@ COMPLETED ----> risultato disponibile
 
 `CREATED` rappresenta anche l'attesa di elaborazione nella prima versione. Non viene introdotto `QUEUED` finché non serve una distinzione reale.
 
-## WIP corrente
+## Stato e prossimo incremento
 
 Il primo slice di creazione e persistenza è verificato. Il prossimo passo è completare la lettura di un Job con `GET /jobs/{id}`, inclusa la gestione del caso inesistente.
 
@@ -80,17 +80,41 @@ Redis verrà studiato e introdotto solo con una responsabilità concreta; MySQL 
 
 La rappresentazione dell'errore di un Job fallito è intenzionalmente rimandata a quando verrà implementato il percorso `FAILED`.
 
-## Roadmap tecnica
+## Scope v0.1
 
-1. Completare GET /jobs/{id} e gestione not-found.
-2. Worker/executor in-process, lifecycle ed esecuzione asincrona.
-3. Processor PDF e persistenza dell'output.
-4. Gestione errori e lettura dello stato.
-5. Aggiornamenti realtime, valutando SSE per primo.
-6. Concorrenza, retry, timeout, cancellazione e idempotenza.
-7. Redis dove risolve un problema concreto, mantenendo MySQL come source of truth.
-8. Messaging/RabbitMQ e, se giustificato, separazione API/worker.
-9. Spring AI/tool calling come orchestratore vincolato, non come semplice chatbot.
+1. Completare `GET /jobs/{id}`, DTO e caso inesistente.
+2. Implementare un Processor PDF concreto.
+3. Eseguire il lavoro con Worker/Executor in-process.
+4. Gestire `PROCESSING`, `COMPLETED` e `FAILED` e persistere risultato o errore.
+5. Recuperare il risultato e verificare il percorso di successo e quello di fallimento.
+
+La v0.1 termina quando un job può essere creato, elaborato e concluso con un esito verificabile. Realtime, retry complessi, cancellazione, Redis, RabbitMQ, separazione API/worker e Spring AI restano opzioni successive, da scegliere soltanto per un problema concreto.
+
+## Implementato e ancora mancante
+
+- Implementati: entity JPA, `GeneratePdfWork`, modello `GeneratedPDFResult`, repository e `POST /jobs`.
+- `GeneratedPDFResult` è un modello persistente, non prova che un PDF venga già generato.
+- `JobWorker` è ancora vuoto; Processor/Executor e gestione del risultato non sono operativi.
+- `GET /jobs/{id}` non è ancora esposto: anche il riferimento `Location` della creazione anticipa quella risorsa.
+- Non è presente un frontend. Non sono ancora implementati autenticazione, Redis o messaging.
+
+## Avvio locale
+
+Richiede Java 21, Maven e MySQL con database `job_flow`. La configurazione corrente usa MySQL su `localhost:3306`, utente `root` e password da `DB_PASSWORD`. Impostare i valori tramite ambiente; non versionare credenziali reali.
+
+```bash
+./mvnw spring-boot:run
+```
+
+Su Windows usare `mvnw.cmd`. L'API usa la porta predefinita Spring Boot, `8080`. Hibernate usa attualmente `ddl-auto=update`, configurazione di sviluppo che non equivale a migrazioni versionate per produzione.
+
+## Verifiche
+
+```bash
+./mvnw test
+```
+
+Il repository contiene un test di avvio del contesto. La verifica manuale di creazione/persistenza è documentata; manca una suite comportamentale per lettura, worker e lifecycle.
 
 ## Principi
 
