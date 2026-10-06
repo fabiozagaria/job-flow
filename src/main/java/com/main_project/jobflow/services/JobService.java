@@ -1,6 +1,7 @@
 package com.main_project.jobflow.services;
 
 import com.main_project.jobflow.dto.CreatePdfJobRequest;
+import com.main_project.jobflow.exception.JobNotFoundException;
 import com.main_project.jobflow.models.Job;
 import com.main_project.jobflow.models.StatusJob;
 
@@ -27,5 +28,10 @@ public class JobService {
                 .build();
         return jobRepository.save(job);
 
+    }
+
+    public Job getById(long id) {
+        return jobRepository.getById(id)
+                .orElseThrow( ()-> new JobNotFoundException("Id non trovato!"));
     }
 }
