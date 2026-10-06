@@ -7,5 +7,5 @@ import java.util.Optional;
 
 public interface JobRepository extends JpaRepository<Job, Long> {
 
-    Optional<Job> getById(long id);
+
 }

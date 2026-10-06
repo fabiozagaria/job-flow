@@ -30,8 +30,8 @@ public class JobService {
 
     }
 
-    public Job getById(long id) {
-        return jobRepository.getById(id)
+    public Job findById(long id) {
+        return jobRepository.findById(id)
                 .orElseThrow( ()-> new JobNotFoundException("Id non trovato!"));
     }
 }
