@@ -34,10 +34,11 @@ Il Work descrive **cosa va fatto**. L'elaborazione sarà responsabilità di un `
 
 ## API implementata
 
-È disponibile il primo endpoint di creazione:
+Sono presenti gli endpoint di creazione e lettura:
 
 ```text
 POST /jobs
+GET /jobs/{id}
 ```
 
 La request usa `CreatePdfJobRequest` con Bean Validation. Il backend costruisce `GeneratePdfWork` e `Job`, assegna autonomamente lo stato iniziale `CREATED` e persiste il Job tramite `JobRepository`.
@@ -72,7 +73,7 @@ COMPLETED ----> risultato disponibile
 
 ## Stato e prossimo incremento
 
-Il primo slice di creazione e persistenza è verificato. Il prossimo passo è completare la lettura di un Job con `GET /jobs/{id}`, inclusa la gestione del caso inesistente.
+Il primo slice di creazione e persistenza è verificato. `GET /jobs/{id}` è implementato dal 6 ottobre con `JobResponse` e `JobNotFoundException` nel service; restano da verificare a runtime risposta 200, risposta 404 e formato dell'errore.
 
 Solo dopo si passa al dispatch asincrono in-process con Executor e JobWorker.
 
@@ -82,7 +83,7 @@ La rappresentazione dell'errore di un Job fallito è intenzionalmente rimandata 
 
 ## Scope v0.1
 
-1. Completare `GET /jobs/{id}`, DTO e caso inesistente.
+1. Verificare a runtime `GET /jobs/{id}` su ID esistente e inesistente.
 2. Implementare un Processor PDF concreto.
 3. Eseguire il lavoro con Worker/Executor in-process.
 4. Gestire `PROCESSING`, `COMPLETED` e `FAILED` e persistere risultato o errore.
@@ -92,10 +93,10 @@ La v0.1 termina quando un job può essere creato, elaborato e concluso con un es
 
 ## Implementato e ancora mancante
 
-- Implementati: entity JPA, `GeneratePdfWork`, modello `GeneratedPDFResult`, repository e `POST /jobs`.
+- Implementati: entity JPA, `GeneratePdfWork`, modello `GeneratedPDFResult`, repository, `POST /jobs` e `GET /jobs/{id}`.
 - `GeneratedPDFResult` è un modello persistente, non prova che un PDF venga già generato.
-- `JobWorker` è ancora vuoto; Processor/Executor e gestione del risultato non sono operativi.
-- `GET /jobs/{id}` non è ancora esposto: anche il riferimento `Location` della creazione anticipa quella risorsa.
+- `JobWorker` contiene il riferimento al service, ma non esegue ancora lavori; Processor/Executor e gestione del risultato non sono operativi.
+- `GET /jobs/{id}` restituisce un DTO; la verifica runtime di successo e not-found resta aperta.
 - Non è presente un frontend. Non sono ancora implementati autenticazione, Redis o messaging.
 
 ## Avvio locale
@@ -129,4 +130,4 @@ Il repository contiene un test di avvio del contesto. La verifica manuale di cre
 
 **In sviluppo — creazione e persistenza del primo Job verificate end-to-end.**
 
-Prossimo passo: implementare e verificare `GET /jobs/{id}`, poi iniziare il dispatch asincrono in-process.
+Prossimo passo: verificare `GET /jobs/{id}`, poi iniziare il dispatch asincrono in-process.
