@@ -1,5 +1,7 @@
 # JobFlow
 
+**Versione corrente:** `v0.1.0-alpha.1` (prerelease).
+
 JobFlow è un progetto backend orientato all'elaborazione asincrona di job. Il primo obiettivo è accettare un lavoro, eseguirlo tramite worker ed esporre stato e risultato. L'esecuzione asincrona è il traguardo della v0.1, non una funzionalità già completata.
 
 ## Obiettivo della prima versione
