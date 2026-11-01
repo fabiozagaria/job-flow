@@ -1,6 +1,6 @@
 # JobFlow — Context
 
-Ultimo aggiornamento: 2026-09-28
+Ultimo aggiornamento: 2026-11-01
 
 ## Obiettivo
 
@@ -13,7 +13,7 @@ Un client crea un job e JobFlow riesce a elaborarlo asincronamente fino a uno st
 ## Stato reale verificato
 
 - Progetto Spring Boot inizializzato con Maven, Spring Boot 4.1.1 e Java 21 come target.
-- Dipendenze: Spring Web MVC, Spring Data JPA, Validation, MySQL Driver e Lombok.
+- Dipendenze: Spring Web MVC, Spring Data JPA, Validation, MySQL Driver, Lombok e MapStruct 1.6.3 (con `lombok-mapstruct-binding`).
 - MySQL configurato su database `job_flow`; password da `DB_PASSWORD`, non versionata.
 - `Job`: entity con `id`, `name`, `Work`, `Result` e `StatusJob`.
 - `StatusJob`: `CREATED`, `PROCESSING`, `COMPLETED`, `FAILED`, persistito con `EnumType.STRING`.
@@ -25,8 +25,11 @@ Un client crea un job e JobFlow riesce a elaborarlo asincronamente fino a uno st
 - `JobRepository extends JpaRepository<Job, Long>` implementato.
 - `CreatePdfJobRequest` implementato come record con Bean Validation.
 - `JobService.createPdfJob(...)` costruisce GeneratePdfWork e Job, assegna `CREATED` e salva il Job.
-- `JobController` espone `POST /jobs` e restituisce `JobResponse` tramite `ResponseEntity.created(...)`.
-- La response contiene `id`, `name` e `status`; Location viene costruita per la risorsa creata.
+- `JobController` espone `POST /jobs` e `GET /jobs/{id}`; entrambi restituiscono `JobResponse` (`id`, `name`, `status`) tramite `JobMapper`.
+- `JobMapper` (MapStruct, `componentModel = "spring"`) mappa `Job -> JobResponse`; `JobMapperImpl` è generato in compilazione.
+- `GET /jobs/{id}`: `JobService.findById` lancia `JobNotFoundException`; `GlobalExceptionHandler` risponde 404 con `APIError` (`errorName=JOB_NOT_FOUND`, `path`, `msg`, `status`, `timestamp`).
+- `POST /jobs` usa `ResponseEntity.created(...)`; Location viene costruita per la risorsa creata.
+- Test automatici (9, tutti verdi): `JobServiceTest` (Mockito), `JobControllerTest` (`@WebMvcTest` con service mockato: 200, 404, 201 + Location, 400 su validazione) e `JobflowApplicationTests`. Il GET non è ancora stato provato a runtime contro MySQL/Postman.
 - Test manuale eseguito con Postman: `POST /jobs` ha restituito **201 Created**, id generato e status `CREATED`.
 - Persistenza verificata in MySQL: Job e GeneratePdfWork risultano salvati correttamente tramite cascade.
 - Processor, ProcessorRegistry, JobWorker ed Executor non sono ancora implementati.
@@ -86,11 +89,19 @@ Questo incremento è verificato tramite Postman e controllo della persistenza ne
 
 ## WIP / punto preciso di ripresa
 
-**Completare la lettura del Job creato.**
+**Dispatch asincrono in-process: Executor + JobWorker.**
 
-Prossima azione: implementare `GET /jobs/{id}`, partendo da `JobRepository.findById(id)`, decidendo la gestione del caso inesistente e restituendo un DTO appropriato.
+`GET /jobs/{id}` è implementato e coperto da test MockMvc. Resta una verifica manuale a runtime (Postman + MySQL) su id esistente e inesistente.
 
-Dopo la verifica del GET, passare al dispatch asincrono in-process con Executor e JobWorker. Redis può essere affiancato come studio/integrazione mirata senza interrompere il Sprint Goal.
+Prossima azione: far transitare un Job `CREATED -> PROCESSING -> COMPLETED | FAILED` fuori dal thread della request. Domande aperte da decidere (tutor mode):
+
+1. Chi avvia il worker e quando rispetto al commit della transazione di `POST /jobs`.
+2. Quale classe persiste i cambi di stato (worker o metodi di `JobService`).
+3. Come si risolve il `Processor` dal tipo concreto di `Work` (`ProcessorRegistry`, senza `if`/`switch`).
+4. Dove si cattura l'errore per portare il Job a `FAILED`.
+5. `@Async` o bean `ThreadPoolTaskExecutor`/`ExecutorService`.
+
+Primo incremento suggerito: un solo passaggio `CREATED -> PROCESSING -> COMPLETED` con un processor finto, prima del PDF vero. Redis può essere affiancato come studio mirato senza interrompere il Sprint Goal.
 
 ## Metodo di lavoro
 
