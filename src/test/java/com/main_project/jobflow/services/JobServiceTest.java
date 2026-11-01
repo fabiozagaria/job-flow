@@ -82,4 +82,13 @@ class JobServiceTest {
         assertThatThrownBy(() -> jobService.findById(99L))
                 .isInstanceOf(JobNotFoundException.class);
     }
+
+    @Test
+    void markAsProcessing_movesCreatedJobToProcessing() {
+        Job job = Job.builder().id(1L).name("job1").status(StatusJob.CREATED).build();
+        when(jobRepository.findById(1L)).thenReturn(Optional.of(job));
+        jobService.markAsProcessing(job.getId());
+        assertThat(job.getStatus()).isEqualTo(StatusJob.PROCESSING);
+
+    }
 }

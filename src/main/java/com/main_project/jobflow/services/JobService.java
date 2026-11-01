@@ -13,8 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 @Service
 @RequiredArgsConstructor
@@ -47,4 +45,17 @@ public class JobService {
         return jobRepository.findById(id)
                 .orElseThrow( ()-> new JobNotFoundException("Id non trovato!"));
     }
+
+    @Transactional
+    public void markAsProcessing(long jobId) {
+        var job = findById(jobId);
+        if(job.getStatus() != StatusJob.CREATED) {
+            throw new RuntimeException( "Job " + jobId + " non è in CREATED ma in " + job.getStatus());
+        }
+        job.setStatus(StatusJob.PROCESSING);
+
+
+    }
+
+
 }
