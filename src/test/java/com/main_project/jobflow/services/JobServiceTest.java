@@ -1,6 +1,7 @@
 package com.main_project.jobflow.services;
 
 import com.main_project.jobflow.dto.CreatePdfJobRequest;
+import com.main_project.jobflow.events.JobCreatedEvent;
 import com.main_project.jobflow.exception.JobNotFoundException;
 import com.main_project.jobflow.models.Job;
 import com.main_project.jobflow.models.StatusJob;
@@ -12,6 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 
@@ -26,6 +28,9 @@ class JobServiceTest {
 
     @Mock
     private JobRepository jobRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private JobService jobService;
@@ -47,6 +52,19 @@ class JobServiceTest {
         assertThat(work.getTitle()).isEqualTo("titolo");
         assertThat(work.getTextBody()).isEqualTo("corpo");
         assertThat(result).isSameAs(saved);
+    }
+
+    @Test
+    void createPdfJob_publishesJobCreatedEventWithSavedId() {
+        when(jobRepository.save(any(Job.class))).thenAnswer(inv -> {
+            Job j = inv.getArgument(0);
+            j.setId(7L);
+            return j;
+        });
+
+        jobService.createPdfJob(new CreatePdfJobRequest("job1", "titolo", "corpo"));
+
+        verify(eventPublisher).publishEvent(new JobCreatedEvent(7L));
     }
 
     @Test

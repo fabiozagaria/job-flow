@@ -30,8 +30,7 @@ public class JobController {
 
     @PostMapping
     public ResponseEntity<JobResponse> post(
-            @Valid @RequestBody CreatePdfJobRequest createPdfJobRequest,
-            HttpServletRequest request
+            @Valid @RequestBody CreatePdfJobRequest createPdfJobRequest
             )
     {
         Job job = jobService.createPdfJob(createPdfJobRequest);

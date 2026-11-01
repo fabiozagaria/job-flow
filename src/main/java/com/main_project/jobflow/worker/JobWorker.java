@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class JobWorker {
 
-    private final JobService jobService;
+
 
 
 }
