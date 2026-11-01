@@ -2,6 +2,7 @@ package com.main_project.jobflow.controllers;
 
 import com.main_project.jobflow.dto.CreatePdfJobRequest;
 import com.main_project.jobflow.dto.JobResponse;
+import com.main_project.jobflow.mapper.JobMapper;
 import com.main_project.jobflow.models.Job;
 import com.main_project.jobflow.services.JobService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,24 +19,18 @@ import java.net.URI;
 @RequiredArgsConstructor
 public class JobController {
     private final JobService jobService;
+    private final JobMapper jobMapper;
 
     @GetMapping("/{id}")
     public JobResponse getById(
             @PathVariable long id
     ) {
-        Job job = jobService.findById(id);
-        return new JobResponse(
-                job.getId(),
-                job.getName(),
-                job.getStatus()
-        );
-
+        return jobMapper.toResponse(jobService.findById(id));
     }
 
     @PostMapping
     public ResponseEntity<JobResponse> post(
-            @Valid @RequestBody CreatePdfJobRequest createPdfJobRequest,
-            HttpServletRequest request
+            @Valid @RequestBody CreatePdfJobRequest createPdfJobRequest
             )
     {
         Job job = jobService.createPdfJob(createPdfJobRequest);
@@ -46,7 +41,7 @@ public class JobController {
                         .path("/{id}")
                         .buildAndExpand(job.getId())
                         .toUri())
-                .body(new JobResponse(job.getId(), job.getName(), job.getStatus()));
+                .body(jobMapper.toResponse(job));
     }
 
 }

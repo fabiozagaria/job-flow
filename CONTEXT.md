@@ -1,6 +1,6 @@
 # JobFlow — Context
 
-Ultimo aggiornamento: 2026-09-28
+Ultimo aggiornamento: 2026-11-01 (fine sessione worker)
 
 ## Obiettivo
 
@@ -13,7 +13,7 @@ Un client crea un job e JobFlow riesce a elaborarlo asincronamente fino a uno st
 ## Stato reale verificato
 
 - Progetto Spring Boot inizializzato con Maven, Spring Boot 4.1.1 e Java 21 come target.
-- Dipendenze: Spring Web MVC, Spring Data JPA, Validation, MySQL Driver e Lombok.
+- Dipendenze: Spring Web MVC, Spring Data JPA, Validation, MySQL Driver, Lombok e MapStruct 1.6.3 (con `lombok-mapstruct-binding`).
 - MySQL configurato su database `job_flow`; password da `DB_PASSWORD`, non versionata.
 - `Job`: entity con `id`, `name`, `Work`, `Result` e `StatusJob`.
 - `StatusJob`: `CREATED`, `PROCESSING`, `COMPLETED`, `FAILED`, persistito con `EnumType.STRING`.
@@ -24,12 +24,17 @@ Un client crea un job e JobFlow riesce a elaborarlo asincronamente fino a uno st
 - Job → Work usa `CascadeType.PERSIST`.
 - `JobRepository extends JpaRepository<Job, Long>` implementato.
 - `CreatePdfJobRequest` implementato come record con Bean Validation.
-- `JobService.createPdfJob(...)` costruisce GeneratePdfWork e Job, assegna `CREATED` e salva il Job.
-- `JobController` espone `POST /jobs` e restituisce `JobResponse` tramite `ResponseEntity.created(...)`.
-- La response contiene `id`, `name` e `status`; Location viene costruita per la risorsa creata.
+- `JobService.createPdfJob(...)` costruisce GeneratePdfWork e Job, assegna `CREATED`, salva il Job e pubblica `JobCreatedEvent(jobId)` dentro la transazione.
+- `JobWorker` è un bean con `@TransactionalEventListener(AFTER_COMMIT)` + `@Async` su `handleJobCreated`: parte solo dopo il commit e gira su un thread separato (verificato: `task-1`). `SpringConfig` abilita `@EnableAsync`.
+- `JobService.markAsProcessing(long jobId)` (`@Transactional`): legge il Job, lancia `RuntimeException` (messaggio con id e stato) se non è `CREATED`, altrimenti lo porta a `PROCESSING` (dirty checking, nessuna `save`). Il worker la chiama. Verificato a runtime: dopo `POST /jobs` lo status in MySQL è `PROCESSING`.
+- `JobController` espone `POST /jobs` e `GET /jobs/{id}`; entrambi restituiscono `JobResponse` (`id`, `name`, `status`) tramite `JobMapper`.
+- `JobMapper` (MapStruct, `componentModel = "spring"`) mappa `Job -> JobResponse`; `JobMapperImpl` è generato in compilazione.
+- `GET /jobs/{id}`: `JobService.findById` lancia `JobNotFoundException`; `GlobalExceptionHandler` risponde 404 con `APIError` (`errorName=JOB_NOT_FOUND`, `path`, `msg`, `status`, `timestamp`).
+- `POST /jobs` usa `ResponseEntity.created(...)`; Location viene costruita per la risorsa creata.
+- Test automatici (tutti verdi): `JobServiceTest` (Mockito, incluso `markAsProcessing_movesCreatedJobToProcessing`), `JobControllerTest` (`@WebMvcTest` con service mockato: 200, 404, 201 + Location, 400 su validazione) e `JobflowApplicationTests`. Il GET non è ancora stato provato a runtime contro MySQL/Postman.
 - Test manuale eseguito con Postman: `POST /jobs` ha restituito **201 Created**, id generato e status `CREATED`.
 - Persistenza verificata in MySQL: Job e GeneratePdfWork risultano salvati correttamente tramite cascade.
-- Processor, ProcessorRegistry, JobWorker ed Executor non sono ancora implementati.
+- `Processor<I, O>` esiste solo come interfaccia; `ProcessorRegistry` e un processor concreto non sono ancora implementati. Il worker non porta ancora il Job a `COMPLETED`/`FAILED`.
 
 ## Decisioni architetturali stabili
 
@@ -86,11 +91,20 @@ Questo incremento è verificato tramite Postman e controllo della persistenza ne
 
 ## WIP / punto preciso di ripresa
 
-**Completare la lettura del Job creato.**
+**Completare il ciclo del worker: `PROCESSING -> COMPLETED | FAILED`.**
 
-Prossima azione: implementare `GET /jobs/{id}`, partendo da `JobRepository.findById(id)`, decidendo la gestione del caso inesistente e restituendo un DTO appropriato.
+Risolto in tutor mode: domande 1 (worker `AFTER_COMMIT`), 2 (i cambi di stato stanno in metodi transazionali di `JobService`, non nel worker: su `task-1` non c'è transazione) e 5 (`@Async` per ora, Executor dedicato rimandato).
 
-Dopo la verifica del GET, passare al dispatch asincrono in-process con Executor e JobWorker. Redis può essere affiancato come studio/integrazione mirata senza interrompere il Sprint Goal.
+Da fare, nell'ordine:
+
+1. **Test 2 di `markAsProcessing` (lo scrive Fabio):** Job non in `CREATED` -> `assertThatThrownBy(...)` con `isInstanceOf(...)` e `hasMessageContaining(...)`. Poi prova di rottura: rompere il codice di produzione e controllare che il test fallisca.
+2. Metodi paralleli in `JobService` per `COMPLETED` e `FAILED`, con test.
+3. Domanda 3: `ProcessorRegistry` per risolvere il `Processor` dal tipo concreto di `Work`, senza `if`/`switch`. Poi un processor finto.
+4. Domanda 4: dove catturare l'errore del worker per portare il Job a `FAILED`. Oggi un'eccezione su `task-1` non la vede nessuno, perché il client ha già ricevuto 201.
+
+Da ricordare: `assertThat(x == y)` senza `.isTrue()`/`.isEqualTo()` non verifica niente, quindi ogni test nuovo va provato rompendo il codice. `GET /jobs/{id}` resta da provare a runtime (Postman + MySQL) con id inesistente (404).
+
+Redis può essere affiancato come studio mirato senza interrompere il Sprint Goal.
 
 ## Metodo di lavoro
 

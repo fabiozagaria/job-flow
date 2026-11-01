@@ -75,7 +75,7 @@ COMPLETED ----> risultato disponibile
 
 ## Stato e prossimo incremento
 
-Il primo slice di creazione e persistenza è verificato. `GET /jobs/{id}` è implementato dal 6 ottobre con `JobResponse` e `JobNotFoundException` nel service; restano da verificare a runtime risposta 200, risposta 404 e formato dell'errore.
+Il primo slice di creazione e persistenza è verificato. `GET /jobs/{id}` è implementato e coperto da test automatici (200, 404 con `APIError` `JOB_NOT_FOUND`); resta una verifica manuale a runtime contro MySQL.
 
 Solo dopo si passa al dispatch asincrono in-process con Executor e JobWorker.
 
@@ -85,7 +85,7 @@ La rappresentazione dell'errore di un Job fallito è intenzionalmente rimandata 
 
 ## Scope v0.1
 
-1. Verificare a runtime `GET /jobs/{id}` su ID esistente e inesistente.
+1. Verificare a runtime (Postman + MySQL) `GET /jobs/{id}` su ID esistente e inesistente; la logica è già coperta da test automatici.
 2. Implementare un Processor PDF concreto.
 3. Eseguire il lavoro con Worker/Executor in-process.
 4. Gestire `PROCESSING`, `COMPLETED` e `FAILED` e persistere risultato o errore.
@@ -95,10 +95,10 @@ La v0.1 termina quando un job può essere creato, elaborato e concluso con un es
 
 ## Implementato e ancora mancante
 
-- Implementati: entity JPA, `GeneratePdfWork`, modello `GeneratedPDFResult`, repository, `POST /jobs` e `GET /jobs/{id}`.
+- Implementati: entity JPA, `GeneratePdfWork`, modello `GeneratedPDFResult`, repository, `POST /jobs`, `GET /jobs/{id}` e `JobMapper` (MapStruct) per `Job -> JobResponse`.
 - `GeneratedPDFResult` è un modello persistente, non prova che un PDF venga già generato.
 - `JobWorker` contiene il riferimento al service, ma non esegue ancora lavori; Processor/Executor e gestione del risultato non sono operativi.
-- `GET /jobs/{id}` restituisce un DTO; la verifica runtime di successo e not-found resta aperta.
+- `GET /jobs/{id}` restituisce un DTO e risponde 404 strutturato se il Job non esiste; la verifica runtime contro MySQL resta aperta.
 - Non è presente un frontend. Non sono ancora implementati autenticazione, Redis o messaging.
 
 ## Avvio locale
@@ -117,7 +117,7 @@ Su Windows usare `mvnw.cmd`. L'API usa la porta predefinita Spring Boot, `8080`.
 ./mvnw test
 ```
 
-Il repository contiene un test di avvio del contesto. La verifica manuale di creazione/persistenza è documentata; manca una suite comportamentale per lettura, worker e lifecycle.
+Il repository contiene 9 test: avvio del contesto, `JobServiceTest` (Mockito) e `JobControllerTest` (`@WebMvcTest`, service mockato). La verifica manuale di creazione/persistenza è documentata; mancano test per repository, worker e lifecycle.
 
 ## Principi
 
@@ -130,6 +130,6 @@ Il repository contiene un test di avvio del contesto. La verifica manuale di cre
 
 ## Stato
 
-**In sviluppo — creazione e persistenza del primo Job verificate end-to-end.**
+**In sviluppo — creazione, persistenza e lettura del Job implementate e coperte da test.**
 
-Prossimo passo: verificare `GET /jobs/{id}`, poi iniziare il dispatch asincrono in-process.
+Prossimo passo: dispatch asincrono in-process con Executor e JobWorker.
