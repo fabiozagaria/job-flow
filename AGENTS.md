@@ -40,19 +40,18 @@ CREATED -> PROCESSING -> COMPLETED
 
 Il precedente modello `type + payload` è stato superato: il Job contiene un Work concreto e il suo tipo identifica il lavoro.
 
-Il repository contiene già il bootstrap Spring Boot e il primo dominio JPA:
-- `Job`;
-- `Work` astratto con `JOINED`;
-- `GeneratePdfWork`;
-- `Result` astratto con `JOINED`;
-- `StatusJob` persistito come stringa.
+Stato verificato nel codice (17 novembre 2026):
+- Dominio JPA: `Job`, `Work` astratto con `JOINED`, `GeneratePdfWork`, `Result` astratto con `JOINED`, `GeneratedPDFResult` (esiste come entity, nessun codice lo produce), `StatusJob` persistito come stringa.
+- API: `POST /jobs` (201 con `Location`) e `GET /jobs/{id}` (404 strutturato con `APIError`), documentate con Swagger UI (springdoc).
+- Asincrono in-process: `JobService` pubblica `JobCreatedEvent` dentro la transazione; `JobWorker` lo ascolta con `@TransactionalEventListener(AFTER_COMMIT)` + `@Async` e chiama `markAsProcessing`, che porta il Job a `PROCESSING`.
+- Persistenza: PostgreSQL con schema versionato da Flyway (`db/migration/V1__init_schema.sql`) e Hibernate in `validate`. Docker (Dockerfile, `docker-compose.yml`) e Blueprint `render.yaml` per Render.
+
+Non esistono ancora: `ProcessorRegistry`, un `Processor` concreto (c'è solo l'interfaccia), le transizioni a `COMPLETED` e `FAILED`, la rappresentazione dell'errore per `FAILED`.
 
 La separazione prevista resta: Work → Processor → Result; ProcessorRegistry per la risoluzione; JobWorker per il lifecycle; eventuale queue separata dal Worker.
 
 ## WIP e prossimo passo
 
-Il WIP corrente **non è ancora Worker/Executor**. Prima verificare la persistenza del primo Job con GeneratePdfWork.
+Il WIP corrente è completare il ciclo del worker: `PROCESSING -> COMPLETED | FAILED`. Il punto preciso di ripresa e l'elenco ordinato sono in `CONTEXT.md`.
 
-Prossimo passo: decidere il lifecycle di persistenza Job → Work (salvataggio esplicito oppure `CascadeType.PERSIST`), quindi implementare il minimo necessario per salvare e rileggere il primo Job da MySQL.
-
-Solo dopo questa verifica passare al dispatch asincrono in-process.
+Prima di aggiungere il Processor: il guard idempotente in `markAsProcessing` (decisione del 3 novembre, non ancora implementata; oggi qualunque stato diverso da `CREATED` lancia `RuntimeException`) e un test d'integrazione del listener.
