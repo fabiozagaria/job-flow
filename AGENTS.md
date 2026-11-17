@@ -27,6 +27,7 @@ Durante implementazione e debugging:
 - Compilare o ricevere HTTP 200 non significa automaticamente Done.
 - Nessun segreto, password o token nel repository.
 - Commit piccoli e comprensibili.
+- **Documentazione sempre allineata.** Ogni modifica (codice, struttura, stato, decisione, versione) aggiorna nella stessa PR tutti i documenti che la riguardano: `README.md`, `CONTEXT.md`, questo file, la versione in `pom.xml` e la scheda Notion del progetto. Se cambiano versione, stato, descrizione o schema del progetto, controllare anche la sua scheda nel portfolio (`fabio-zagaria-portfolio`: dati in `portfolio-angular/src/app/data`, `README.md` e `docs/CONTEXT.md`). Prima di dichiarare finito un lavoro, passare in rassegna l'elenco e dire per ciascun documento se è stato aggiornato o perché non serve. Una modifica senza documenti allineati non è Done.
 
 ## Contesto architetturale corrente
 
