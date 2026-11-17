@@ -47,7 +47,7 @@ La request usa `CreatePdfJobRequest` con Bean Validation. Il backend costruisce 
 
 La risposta usa `JobResponse`, include l'id generato, il nome e lo stato, restituisce **201 Created** e un header `Location` riferito alla risorsa creata.
 
-La persistenza è stata verificata manualmente con Postman e MySQL: il Job e il relativo GeneratePdfWork vengono salvati correttamente tramite cascade.
+La persistenza è stata verificata manualmente con Postman (28 settembre 2026, allora su MySQL): il Job e il relativo GeneratePdfWork vengono salvati correttamente tramite cascade. Dal 17 novembre 2026 il database è PostgreSQL, con schema versionato da Flyway.
 
 ## Flusso obiettivo v0.1
 
@@ -75,17 +75,17 @@ COMPLETED ----> risultato disponibile
 
 ## Stato e prossimo incremento
 
-Il primo slice di creazione e persistenza è verificato. `GET /jobs/{id}` è implementato e coperto da test automatici (200, 404 con `APIError` `JOB_NOT_FOUND`); resta una verifica manuale a runtime contro MySQL.
+Il primo slice di creazione e persistenza è verificato. `GET /jobs/{id}` è implementato e coperto da test automatici (200, 404 con `APIError` `JOB_NOT_FOUND`); secondo la scheda del portfolio del 17 novembre è stato verificato anche in locale su PostgreSQL.
 
-Solo dopo si passa al dispatch asincrono in-process con Executor e JobWorker.
+Il dispatch asincrono in-process è in piedi: `JobCreatedEvent` dopo il commit e `JobWorker` (`@Async`) portano il Job a `PROCESSING`. Resta da completare il ciclo fino a `COMPLETED` o `FAILED`.
 
-Redis verrà studiato e introdotto solo con una responsabilità concreta; MySQL rimane la source of truth dei Job.
+Redis verrà studiato e introdotto solo con una responsabilità concreta; PostgreSQL rimane la source of truth dei Job.
 
 La rappresentazione dell'errore di un Job fallito è intenzionalmente rimandata a quando verrà implementato il percorso `FAILED`.
 
 ## Scope v0.1
 
-1. Verificare a runtime (Postman + MySQL) `GET /jobs/{id}` su ID esistente e inesistente; la logica è già coperta da test automatici.
+1. Verifica a runtime di `GET /jobs/{id}` su ID esistente e inesistente: fatta in locale su PostgreSQL secondo la scheda del portfolio; la logica è coperta anche da test automatici.
 2. Implementare un Processor PDF concreto.
 3. Eseguire il lavoro con Worker/Executor in-process.
 4. Gestire `PROCESSING`, `COMPLETED` e `FAILED` e persistere risultato o errore.
@@ -97,19 +97,19 @@ La v0.1 termina quando un job può essere creato, elaborato e concluso con un es
 
 - Implementati: entity JPA, `GeneratePdfWork`, modello `GeneratedPDFResult`, repository, `POST /jobs`, `GET /jobs/{id}` e `JobMapper` (MapStruct) per `Job -> JobResponse`.
 - `GeneratedPDFResult` è un modello persistente, non prova che un PDF venga già generato.
-- `JobWorker` contiene il riferimento al service, ma non esegue ancora lavori; Processor/Executor e gestione del risultato non sono operativi.
-- `GET /jobs/{id}` restituisce un DTO e risponde 404 strutturato se il Job non esiste; la verifica runtime contro MySQL resta aperta.
-- Non è presente un frontend. Non sono ancora implementati autenticazione, Redis o messaging.
+- `JobWorker` ascolta `JobCreatedEvent` dopo il commit (`@Async`) e porta il Job a `PROCESSING`; non esegue ancora lavori: Processor/Executor, `COMPLETED`/`FAILED` e gestione del risultato non sono operativi.
+- `GET /jobs/{id}` restituisce un DTO e risponde 404 strutturato se il Job non esiste; la verifica in locale su PostgreSQL è riportata nella scheda del portfolio.
+- L'API è documentata con Swagger UI (springdoc). Non è presente un frontend. Non sono ancora implementati autenticazione, Redis o messaging.
 
 ## Avvio locale
 
-Richiede Java 21, Maven e MySQL con database `job_flow`. La configurazione corrente usa MySQL su `localhost:3306`, utente `root` e password da `DB_PASSWORD`. Impostare i valori tramite ambiente; non versionare credenziali reali.
+Richiede Java 21, Maven e PostgreSQL. Con Docker: `DB_PASSWORD=... docker compose up` avvia PostgreSQL 17 e l'API. Senza Docker servono un database `job_flow` su `localhost:5432` e le variabili d'ambiente `DB_PASSWORD` (obbligatoria) e, se diversi dai default, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` (default `postgres`). Non versionare credenziali reali.
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Su Windows usare `mvnw.cmd`. L'API usa la porta predefinita Spring Boot, `8080`. Hibernate usa attualmente `ddl-auto=update`, configurazione di sviluppo che non equivale a migrazioni versionate per produzione.
+Su Windows usare `mvnw.cmd`. L'API usa la porta predefinita Spring Boot, `8080`. Lo schema è creato dalle migrazioni Flyway (`src/main/resources/db/migration`) e Hibernate lo valida (`ddl-auto=validate`). Swagger UI è su `/swagger-ui.html`. Il Blueprint `render.yaml` descrive il deploy su Render (piano free: il database scade dopo 30 giorni).
 
 ## Verifiche
 
@@ -117,7 +117,7 @@ Su Windows usare `mvnw.cmd`. L'API usa la porta predefinita Spring Boot, `8080`.
 ./mvnw test
 ```
 
-Il repository contiene 9 test: avvio del contesto, `JobServiceTest` (Mockito) e `JobControllerTest` (`@WebMvcTest`, service mockato). La verifica manuale di creazione/persistenza è documentata; mancano test per repository, worker e lifecycle.
+Il repository contiene 11 test: avvio del contesto (`contextLoads`, richiede PostgreSQL), `JobServiceTest` (5, Mockito) e `JobControllerTest` (5, `@WebMvcTest`, service mockato). I 10 test senza database sono passati il 17 novembre 2026. La verifica manuale di creazione/persistenza è documentata; mancano test per repository, worker, listener e per `markAsProcessing` su un job non in `CREATED`.
 
 ## Principi
 
@@ -130,6 +130,6 @@ Il repository contiene 9 test: avvio del contesto, `JobServiceTest` (Mockito) e 
 
 ## Stato
 
-**In sviluppo — creazione, persistenza e lettura del Job implementate e coperte da test.**
+**In sviluppo — creazione, persistenza e lettura del Job, passaggio asincrono a `PROCESSING`, Swagger UI e deploy su Render implementati.**
 
-Prossimo passo: dispatch asincrono in-process con Executor e JobWorker.
+Prossimo passo: guard idempotente in `markAsProcessing`, poi Processor PDF, `ProcessorRegistry` e transizioni a `COMPLETED`/`FAILED`.
