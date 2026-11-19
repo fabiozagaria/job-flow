@@ -117,7 +117,7 @@ Dal 19 novembre 2026 il database di produzione è PostgreSQL su [Neon](https://n
 
 Su Render, nel servizio `jobflow`:
 
-1. `DATABASE_URL`: la connessione **diretta** di Neon (Connect → pooled connection spenta; l'host non contiene `-pooler`, perché Neon sconsiglia il pooler per Flyway), nel formato `postgresql://utente:password@host/neondb?...`. `docker-entrypoint.sh` la converte nell'URL JDBC togliendo i parametri e ne ricava `DB_USER` e `DB_PASSWORD`, se non sono impostati a parte.
+1. `DATABASE_URL`: la connessione **diretta** di Neon (Connect → pooled connection spenta; l'host non contiene `-pooler`, perché Neon sconsiglia il pooler per Flyway), nel formato `postgresql://utente:password@host/neondb?...` (scheda "Connection string" di Connect, **non** la scheda Java/JDBC: un URL che non inizia con `postgresql://` ferma l'avvio con un messaggio chiaro). `docker-entrypoint.sh` la converte nell'URL JDBC togliendo i parametri e ne ricava `DB_USER` e `DB_PASSWORD`, se non sono impostati a parte.
 2. `SPRING_PROFILES_ACTIVE=neon`, da impostare per ultima: `application-neon.properties` impone TLS con verifica del certificato (`sslmode=verify-full`, `channelBinding=require`) e usa al massimo 3 connessioni senza tenerne aperte a riposo, così Neon si spegne quando non è usato.
 3. Al primo avvio Flyway crea lo schema. Verificare Swagger UI, un `POST /jobs` e il relativo `GET` dopo un riavvio del servizio.
 

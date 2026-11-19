@@ -7,6 +7,15 @@ set -e
 # I parametri dell'URL (es. sslmode=require di Neon) vengono tolti: le impostazioni TLS stanno nel
 # profilo Spring (application-neon.properties) e non devono essere sovrascritte dall'URL.
 if [ -n "$DATABASE_URL" ]; then
+  case "$DATABASE_URL" in
+    postgres://*|postgresql://*) ;;
+    *)
+      # Non stampare il valore: può contenere la password (es. ...?user=...&password=... del formato JDBC).
+      echo "DATABASE_URL deve iniziare con postgresql:// (formato postgresql://utente:password@host/database)." >&2
+      echo "Su Neon: Connect -> \"Connection string\", non la scheda Java/JDBC." >&2
+      exit 1
+      ;;
+  esac
   rest="${DATABASE_URL#*://}"
   host_and_db="${rest#*@}"
   export SPRING_DATASOURCE_URL="jdbc:postgresql://${host_and_db%%\?*}"
