@@ -1,11 +1,24 @@
 #!/bin/sh
 set -e
 
-# Render fornisce DATABASE_URL come postgresql://user:password@host[:port]/database.
-# Il driver JDBC vuole jdbc:postgresql://host[:port]/database, con credenziali separate
-# (DB_USER e DB_PASSWORD, lette da application.properties).
+# DATABASE_URL arriva come postgresql://user:password@host[:port]/database[?parametri]
+# (Neon, oppure un altro PostgreSQL). Il driver JDBC vuole jdbc:postgresql://host[:port]/database,
+# con credenziali separate (DB_USER e DB_PASSWORD, lette da application.properties).
+# I parametri dell'URL (es. sslmode=require di Neon) vengono tolti: le impostazioni TLS stanno nel
+# profilo Spring (application-neon.properties) e non devono essere sovrascritte dall'URL.
 if [ -n "$DATABASE_URL" ]; then
-  export SPRING_DATASOURCE_URL="jdbc:postgresql://${DATABASE_URL##*@}"
+  rest="${DATABASE_URL#*://}"
+  host_and_db="${rest#*@}"
+  export SPRING_DATASOURCE_URL="jdbc:postgresql://${host_and_db%%\?*}"
+  # Utente e password dall'URL solo se non sono già impostati separatamente.
+  case "$rest" in
+    *@*)
+      credentials="${rest%%@*}"
+      : "${DB_USER:=${credentials%%:*}}"
+      : "${DB_PASSWORD:=${credentials#*:}}"
+      export DB_USER DB_PASSWORD
+      ;;
+  esac
 fi
 
 # Render imposta PORT (default 10000); 8080 per l'uso locale.

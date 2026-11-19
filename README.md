@@ -109,7 +109,19 @@ Richiede Java 21, Maven e PostgreSQL. Con Docker: `DB_PASSWORD=... docker compos
 ./mvnw spring-boot:run
 ```
 
-Su Windows usare `mvnw.cmd`. L'API usa la porta predefinita Spring Boot, `8080`. Lo schema è creato dalle migrazioni Flyway (`src/main/resources/db/migration`) e Hibernate lo valida (`ddl-auto=validate`). Swagger UI è su `/swagger-ui.html`. Il Blueprint `render.yaml` descrive il deploy su Render (piano free: il database scade dopo 30 giorni).
+Su Windows usare `mvnw.cmd`. L'API usa la porta predefinita Spring Boot, `8080`. Lo schema è creato dalle migrazioni Flyway (`src/main/resources/db/migration`) e Hibernate lo valida (`ddl-auto=validate`). Swagger UI è su `/swagger-ui.html`. Il Blueprint `render.yaml` descrive il deploy su Render.
+
+### Database su Neon
+
+Dal 19 novembre 2026 il database di produzione è PostgreSQL su [Neon](https://neon.com) (piano Free: 100 ore di calcolo al mese e 1 GB per progetto), al posto del PostgreSQL Free di Render, che scadeva dopo 30 giorni. Progetto Neon `jobflow` (`cool-band-65912836`, regione `aws-eu-central-1`), branch `main`, PostgreSQL 18.
+
+Su Render, nel servizio `jobflow`:
+
+1. `DATABASE_URL`: la connessione **diretta** di Neon (Connect → pooled connection spenta; l'host non contiene `-pooler`, perché Neon sconsiglia il pooler per Flyway), nel formato `postgresql://utente:password@host/neondb?...`. `docker-entrypoint.sh` la converte nell'URL JDBC togliendo i parametri e ne ricava `DB_USER` e `DB_PASSWORD`, se non sono impostati a parte.
+2. `SPRING_PROFILES_ACTIVE=neon`, da impostare per ultima: `application-neon.properties` impone TLS con verifica del certificato (`sslmode=verify-full`, `channelBinding=require`) e usa al massimo 3 connessioni senza tenerne aperte a riposo, così Neon si spegne quando non è usato.
+3. Al primo avvio Flyway crea lo schema. Verificare Swagger UI, un `POST /jobs` e il relativo `GET` dopo un riavvio del servizio.
+
+`neon.ts` descrive la configurazione Neon come codice e `package.json` contiene solo le librerie lette dalla CLI `neon` (`@neon/config`, `@neon/env`): non entrano nella build Maven né nell'immagine Docker. Dalla radice del repository, dopo `npm install` e `neon login`, `neon deploy` scrive in `.env.local` (escluso da Git) `DATABASE_URL` e `DATABASE_URL_UNPOOLED`. Da un PC con browser `psql -h pg.neon.tech` permette di collegarsi senza password per controllare le tabelle.
 
 ## Verifiche
 
@@ -130,6 +142,6 @@ Il repository contiene 11 test: avvio del contesto (`contextLoads`, richiede Pos
 
 ## Stato
 
-**In sviluppo — creazione, persistenza e lettura del Job, passaggio asincrono a `PROCESSING`, Swagger UI e deploy su Render implementati.**
+**In sviluppo — creazione, persistenza e lettura del Job, passaggio asincrono a `PROCESSING`, Swagger UI e deploy su Render (database su Neon) implementati.**
 
 Prossimo passo: guard idempotente in `markAsProcessing`, poi Processor PDF, `ProcessorRegistry` e transizioni a `COMPLETED`/`FAILED`.

@@ -1,6 +1,6 @@
 # JobFlow — Context
 
-Ultimo aggiornamento: 2026-11-17 (allineamento a PostgreSQL, Swagger UI, Docker e Render)
+Ultimo aggiornamento: 2026-11-19 (database di produzione spostato su Neon)
 
 ## Obiettivo
 
@@ -36,7 +36,8 @@ Un client crea un job e JobFlow riesce a elaborarlo asincronamente fino a uno st
 - Persistenza verificata a mano su MySQL (28 settembre 2026, prima della migrazione a PostgreSQL): Job e GeneratePdfWork risultano salvati correttamente tramite cascade.
 - `GeneratedPDFResult` (tabella `generated_pdf_results`) esiste come entity, ma nessun codice la produce. `Processor<I, O>` esiste solo come interfaccia; `ProcessorRegistry` e un processor concreto non sono ancora implementati. Il worker non porta ancora il Job a `COMPLETED`/`FAILED`.
 - Swagger UI: `OpenApiConfig` (springdoc) descrive l'API; `server.forward-headers-strategy=framework` fa usare gli header del proxy, così «Try it out» e `Location` puntano a https.
-- Deploy: `Dockerfile` multi-stage (Java 21), `docker-compose.yml` (postgres:17 + app), `docker-entrypoint.sh` che converte `DATABASE_URL` nell'URL JDBC e Blueprint `render.yaml` (web Docker e database `jobflow-db`, piano free: il database scade dopo 30 giorni). Secondo la scheda del portfolio è online su Render con Swagger UI (`https://jobflow-dbnm.onrender.com/swagger-ui.html`); non riverificato qui.
+- Deploy: `Dockerfile` multi-stage (Java 21), `docker-compose.yml` (postgres:17 + app), `docker-entrypoint.sh` che converte `DATABASE_URL` nell'URL JDBC (senza parametri) e ne ricava `DB_USER`/`DB_PASSWORD` se mancano, e Blueprint `render.yaml` (solo il web Docker: `DATABASE_URL` e `SPRING_PROFILES_ACTIVE` si impostano a mano).
+- Database su Neon dal 19 novembre 2026, al posto di `jobflow-db` (PostgreSQL Free di Render, scadeva dopo 30 giorni): progetto `jobflow` (`cool-band-65912836`, `aws-eu-central-1`), branch `main`, PostgreSQL 18.7. Profilo `neon` (`application-neon.properties`): TLS `verify-full`, `channelBinding=require`, pool di massimo 3 connessioni senza connessioni a riposo. `neon.ts` e `package.json` servono solo alla CLI `neon`. Verificato: 11 test passati con PostgreSQL 18; `docker-entrypoint.sh` avviato due volte con `SPRING_PROFILES_ACTIVE=neon` su PostgreSQL 18.7 locale (TLS spento solo per la prova): Flyway applica V1 e poi trova lo schema aggiornato, `POST /jobs` crea il Job e `GET /jobs/1` lo ritrova dopo il riavvio, `GET /jobs/999` risponde 404; con TLS imposto l'avvio contro un server senza SSL viene rifiutato; il database Neon risponde tramite l'endpoint SQL su HTTPS (ancora senza tabelle). Non verificati: connessione JDBC dell'app al database Neon reale e deploy su Render. Il vecchio `jobflow-db` resta su Render finché non lo si elimina a mano: togliendolo dal Blueprint Render non lo cancella. Secondo la scheda del portfolio è online su Render con Swagger UI (`https://jobflow-dbnm.onrender.com/swagger-ui.html`); non riverificato qui.
 
 ## Decisioni architetturali stabili
 

@@ -6,24 +6,12 @@ services:
     dockerfilePath: ./Dockerfile
     autoDeployTrigger: commit
     envVars:
-      # postgresql://user:password@host[:port]/database
-      # docker-entrypoint.sh lo converte nell'URL JDBC (SPRING_DATASOURCE_URL).
+      # Database su Neon (piano Free), da impostare a mano su Render (vedi README, "Deploy").
+      # DATABASE_URL: connessione diretta di Neon, postgresql://user:password@host/database
+      # (host senza "-pooler"). docker-entrypoint.sh la converte nell'URL JDBC e ne ricava
+      # DB_USER e DB_PASSWORD. Poi SPRING_PROFILES_ACTIVE=neon (TLS verificato, pool piccolo).
+      # Il PostgreSQL Free di Render (jobflow-db) scadeva dopo 30 giorni: non è più nel Blueprint.
       - key: DATABASE_URL
-        fromDatabase:
-          name: jobflow-db
-          property: connectionString
-      - key: DB_USER
-        fromDatabase:
-          name: jobflow-db
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: jobflow-db
-          property: password
-
-databases:
-  # Il piano free scade dopo 30 giorni (poi 14 di grazia prima della cancellazione).
-  - name: jobflow-db
-    plan: free
-    databaseName: job_flow
-    user: jobflow
+        sync: false
+      - key: SPRING_PROFILES_ACTIVE
+        sync: false
